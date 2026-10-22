@@ -110,10 +110,17 @@ import android.widget.ImageButton;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.util.Consumer;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.preference.PreferenceManager;
+import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter;
+import androidx.window.layout.DisplayFeature;
+import androidx.window.layout.FoldingFeature;
+import androidx.window.layout.WindowInfoTracker;
+import androidx.window.layout.WindowLayoutInfo;
 
 import android.os.Looper;
 import java.nio.charset.StandardCharsets;
@@ -206,6 +213,14 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     private boolean grabbedInput = true;
     private boolean cursorVisible = false;
     private boolean windowImmersive = false;
+
+    // Hinge of a half-open foldable held like a laptop (fold line horizontal), in window coordinates.
+    // Static so a stream restarted by recreate() can size itself before the fold callback fires again.
+    private static Rect tabletopHinge = null;
+    private WindowInfoTrackerCallbackAdapter windowInfoTracker;
+    private Consumer<WindowLayoutInfo> windowLayoutListener;
+    private boolean tabletopActive = false;
+    private boolean tabletopShowedKeyboard = false;
     private boolean isPanZoomMode = false;
     private boolean synthClickPending = false;
     private boolean pointerSwiping = false;
@@ -489,6 +504,8 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         // allows proper touch splitting, which the OSC relies upon.
         View backgroundTouchView = findViewById(R.id.backgroundTouchView);
         backgroundTouchView.setOnTouchListener(this);
+
+        initFoldTracking();
 
 
         panZoomHandler = new PanZoomHandler(
@@ -1158,13 +1175,19 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     // percentage, rounded to multiples of 8 and capped so the long side stays within 4096.
     private int[] computeMatchedStreamSize() {
         DisplayMetrics metrics = getResources().getDisplayMetrics();
+        int areaWidth = metrics.widthPixels;
+        int areaHeight = metrics.heightPixels;
+        if (tabletopHinge != null && !onExternelDisplay) {
+            // Tabletop mode streams only to the half above the hinge
+            areaHeight = Math.min(areaHeight, tabletopHinge.top);
+        }
         float scale = prefConfig.matchScreenScale / 100f;
-        float longSide = Math.max(metrics.widthPixels, metrics.heightPixels) * scale;
+        float longSide = Math.max(areaWidth, areaHeight) * scale;
         if (longSide > 4096) {
             scale *= 4096 / longSide;
         }
-        int width = Math.max(64, Math.round(metrics.widthPixels * scale / 8f) * 8);
-        int height = Math.max(64, Math.round(metrics.heightPixels * scale / 8f) * 8);
+        int width = Math.max(64, Math.round(areaWidth * scale / 8f) * 8);
+        int height = Math.max(64, Math.round(areaHeight * scale / 8f) * 8);
         return new int[] { width, height };
     }
 
@@ -1733,6 +1756,76 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
     };
 
+    // Tabletop mode: when a foldable is half open with the fold line horizontal, the stream shrinks
+    // to the half above the hinge and the other half becomes a touchpad with the on-screen keyboard.
+    private void initFoldTracking() {
+        if (onExternelDisplay) {
+            return;
+        }
+
+        windowInfoTracker = new WindowInfoTrackerCallbackAdapter(WindowInfoTracker.getOrCreate(this));
+        windowLayoutListener = this::onWindowLayoutInfoChanged;
+        windowInfoTracker.addWindowLayoutInfoListener(this, ContextCompat.getMainExecutor(this), windowLayoutListener);
+    }
+
+    private void onWindowLayoutInfoChanged(WindowLayoutInfo layoutInfo) {
+        Rect hinge = null;
+        for (DisplayFeature feature : layoutInfo.getDisplayFeatures()) {
+            if (feature instanceof FoldingFeature) {
+                FoldingFeature fold = (FoldingFeature) feature;
+                if (fold.getState() == FoldingFeature.State.HALF_OPENED &&
+                        fold.getOrientation() == FoldingFeature.Orientation.HORIZONTAL &&
+                        fold.getBounds().top > 0) {
+                    hinge = new Rect(fold.getBounds());
+                    break;
+                }
+            }
+        }
+
+        tabletopHinge = hinge;
+        applyTabletopLayout(hinge);
+
+        // The stream area changed, so restart the stream if "match screen size" is on
+        timerHandler.removeCallbacks(matchedResolutionCheck);
+        timerHandler.postDelayed(matchedResolutionCheck, 1000);
+    }
+
+    private void applyTabletopLayout(Rect hinge) {
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) streamContainer.getLayoutParams();
+        if (hinge != null) {
+            params.height = hinge.top;
+            params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        }
+        else {
+            params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.gravity = prefConfig.alignDisplayTopCenter ?
+                    (Gravity.CENTER_HORIZONTAL | Gravity.TOP) : Gravity.CENTER;
+        }
+        streamContainer.setLayoutParams(params);
+
+        boolean enter = hinge != null;
+        if (enter == tabletopActive) {
+            return;
+        }
+        tabletopActive = enter;
+
+        if (enter) {
+            // The bottom half is the touchpad, so force trackpad mode and bring up the keyboard
+            applyMouseMode(2);
+            if (!isKeyboardLayoutVisible()) {
+                toggleFullKeyboard();
+                tabletopShowedKeyboard = true;
+            }
+        }
+        else {
+            initMouseMode();
+            if (tabletopShowedKeyboard && isKeyboardLayoutVisible()) {
+                toggleFullKeyboard();
+            }
+            tabletopShowedKeyboard = false;
+        }
+    }
+
     // True when running in a freeform/desktop window instead of filling the screen
     private boolean isDesktopWindowed() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInMultiWindowMode()) {
@@ -1802,6 +1895,13 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
         instance = null;
         timerHandler.removeCallbacksAndMessages(null);
+
+        if (windowInfoTracker != null) {
+            windowInfoTracker.removeWindowLayoutInfoListener(windowLayoutListener);
+        }
+        if (isFinishing()) {
+            tabletopHinge = null;
+        }
 
         if (prefConfig.enableFullExDisplay) handleDisplayRemoved();
 

@@ -110,6 +110,9 @@ import android.widget.ImageButton;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.preference.PreferenceManager;
 
 import android.os.Looper;
@@ -202,6 +205,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     private int modifierFlags = 0;
     private boolean grabbedInput = true;
     private boolean cursorVisible = false;
+    private boolean windowImmersive = false;
     private boolean isPanZoomMode = false;
     private boolean synthClickPending = false;
     private boolean pointerSwiping = false;
@@ -461,7 +465,8 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         }
 
         //光标是否显示
-        cursorVisible = prefConfig.enableMouseLocalCursor;
+        // In a desktop-mode window keep the Android cursor so the mouse can leave the stream window
+        cursorVisible = prefConfig.enableMouseLocalCursor || isDesktopWindowed();
 
         // Listen for non-touch events on the game surface
         streamContainer = findViewById(R.id.streamContainer);
@@ -1704,6 +1709,11 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             // TODO: Do we want to use WindowInsetsController here on R+ instead of
             // SYSTEM_UI_FLAG_IMMERSIVE_STICKY? They seem to do the same thing as of S...
 
+            // The user hid the bars themselves with Ctrl+Alt+Shift+F or the game menu
+            if (windowImmersive) {
+                return;
+            }
+
             // In multi-window mode on N+, we need to drop our layout flags or we'll
             // be drawing underneath the system UI.
             if (!prefConfig.fullScreen || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInMultiWindowMode())) {
@@ -1722,6 +1732,29 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
             }
         }
     };
+
+    // True when running in a freeform/desktop window instead of filling the screen
+    private boolean isDesktopWindowed() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInMultiWindowMode()) {
+            return false;
+        }
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !isInPictureInPictureMode();
+    }
+
+    // Hides the system bars and the desktop window's title bar so the stream fills the window
+    public void toggleWindowFullscreen() {
+        windowImmersive = !windowImmersive;
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        int bars = WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.captionBar();
+        if (windowImmersive) {
+            controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(bars);
+        }
+        else {
+            controller.show(bars);
+            hideSystemUi(50);
+        }
+    }
 
     private void hideSystemUi(int delay) {
         Handler h = getWindow().getDecorView().getHandler();
@@ -1747,6 +1780,16 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         else {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             decoderRenderer.notifyVideoForeground();
+        }
+
+        // Windowed desktop mode keeps the Android cursor, so the mouse isn't trapped in the stream
+        if (!isInPictureInPictureMode()) {
+            cursorVisible = prefConfig.enableMouseLocalCursor || isInMultiWindowMode;
+            if (cursorVisible) {
+                inputCaptureProvider.showCursor();
+            } else {
+                inputCaptureProvider.hideCursor();
+            }
         }
 
         // Correct the system UI visibility flags
@@ -2014,6 +2057,11 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                         finish();
                         break;
 
+                    // Toggle fullscreen for the window
+                    case KeyEvent.KEYCODE_F:
+                        toggleWindowFullscreen();
+                        break;
+
                     // Toggle cursor visibility
                     case KeyEvent.KEYCODE_C:
                         if (!grabbedInput) {
@@ -2045,6 +2093,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 case KeyEvent.KEYCODE_Z:
                 case KeyEvent.KEYCODE_Q:
                 case KeyEvent.KEYCODE_C:
+                case KeyEvent.KEYCODE_F:
                     // Remember that a special key combo was activated, so we can consume all key
                     // events until the modifiers come up
                     specialKeyCode = androidKeyCode;

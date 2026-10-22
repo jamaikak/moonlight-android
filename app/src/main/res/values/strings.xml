@@ -372,6 +372,7 @@
     <!-- In Game menu -->
     <string name="game_menu_toggle_keyboard">Show soft keyboard</string>
     <string name="game_menu_toggle_hud">Toggle Performance Overlay</string>
+    <string name="game_menu_toggle_fullscreen">Toggle Window Fullscreen</string>
     <string name="game_menu_toggle_floating_button">Toggle Floating Button</string>
     <string name="game_menu_select_mouse_mode">Select Mouse mode</string>
     <string name="game_menu_select_steam_mode">Select Stream mode</string>

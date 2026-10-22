@@ -161,6 +161,18 @@
             android:launchMode="singleInstance"
             android:taskAffinity=""
             android:theme="@style/ExternalDisplayControllerTheme"/>
+        <!-- Second launcher icon: open the phone's touchpad and keyboard while a stream runs on the monitor -->
+        <activity-alias
+            android:name=".MoonlightTouchpad"
+            android:targetActivity=".utils.ExternalDisplayControlActivity"
+            android:exported="true"
+            android:label="@string/app_label_touchpad"
+            android:icon="@drawable/ic_fullscreen_keyboard">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <activity
             android:name=".preferences.StreamSettings"
             android:resizeableActivity="true"

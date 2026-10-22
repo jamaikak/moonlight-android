@@ -289,6 +289,8 @@ public class PreferenceConfiguration {
     //Invert video width/height
     public boolean autoInvertVideoResolution;
     public int resolutionScaleFactor;
+    // 0 = use the fixed resolution; otherwise stream at this percent of the current window size
+    public int matchScreenScale;
     public boolean resumeWithoutConfirm;
     //竖屏模式
     public boolean autoOrientation;
@@ -967,6 +969,8 @@ private static int getFramePacingValue(Context context) {
         config.enableNewAnalogStick=prefs.getBoolean(CHECKBOX_CHECKBOX_ENABLE_ANALOG_STICK_NEW,false);
 
         config.enableFullExDisplay=prefs.getBoolean("checkbox_enable_fullexdisplay",false);
+
+        config.matchScreenScale = Integer.parseInt(prefs.getString("list_match_screen_scale", "0"));
 
         config.alignDisplayTopCenter =prefs.getBoolean("checkbox_enable_view_top_center",false);
 

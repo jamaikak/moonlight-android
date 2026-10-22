@@ -93,8 +93,19 @@ android {
         }
     }
 
+    signingConfigs {
+        // Public, non-secret key so every CI build is signed the same and installs as an update
+        forkDebug {
+            storeFile file('fork-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
         debug {
+            signingConfig signingConfigs.forkDebug
             applicationIdSuffix ".noirdebug"
             resValue "string", "app_label", "Diana"
             resValue "string", "app_label_root", "Diana (Root)"
@@ -176,6 +187,9 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    // Fold/hinge detection for tabletop mode
+    implementation 'androidx.window:window:1.4.0'
+    implementation 'androidx.window:window-java:1.4.0'
     implementation 'com.google.android.material:material:1.13.0'
     implementation 'com.github.ByteHamster:SearchPreference:v2.5.1'
     implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'

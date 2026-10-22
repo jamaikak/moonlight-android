@@ -120,7 +120,10 @@ public class ExternalDisplayControlActivity extends AppCompatActivity implements
         if (!isGameInstanceAvailable()) {
             Intent gameIntent = getIntent().getParcelableExtra(EXTRA_LAUNCH_INTENT);
             if (gameIntent == null) {
+                // Opened from the "Moonlight Touchpad" launcher icon with no stream running
+                Toast.makeText(this, getString(R.string.no_game_instance), Toast.LENGTH_LONG).show();
                 finish();
+                return;
             } else {
                 Display secondaryDisplay = getSecondaryDisplay(this);
                 if (secondaryDisplay != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

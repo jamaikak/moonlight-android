@@ -1,6 +1,7 @@
 package com.limelight.utils;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.display.DisplayManager;
@@ -151,7 +152,19 @@ public class ServerHelper {
         }
 
         Intent intent = createStartIntent(parent, app, computer, managerBinder, withVDisplay);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isTouchpadIntent(intent)) {
+            // Android desktop mode starts activities on the screen they were launched from, which
+            // would put the touchpad on the monitor underneath the game. Keep it on the phone.
+            ActivityOptions options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY);
+            parent.startActivity(intent, options.toBundle());
+            return;
+        }
         parent.startActivity(intent);
+    }
+
+    private static boolean isTouchpadIntent(Intent intent) {
+        return intent.getComponent() != null &&
+                ExternalDisplayControlActivity.class.getName().equals(intent.getComponent().getClassName());
     }
 
     public static void doNetworkTest(final Activity parent) {

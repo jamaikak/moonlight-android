@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="match_screen_scale_names">
+        <item>@string/match_screen_off</item>
+        <item>100%</item>
+        <item>75%</item>
+        <item>67%</item>
+        <item>50%</item>
+    </string-array>
+
+    <string-array name="match_screen_scale_values" translatable="false">
+        <item>0</item>
+        <item>100</item>
+        <item>75</item>
+        <item>67</item>
+        <item>50</item>
+    </string-array>
+
     <string-array name="resolution_names">
         <item>@string/resolution_360p</item>
         <item>@string/resolution_480p</item>

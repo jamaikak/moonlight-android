@@ -18,6 +18,14 @@
             android:title="@string/title_resolution_list"
             app:iconSpaceReserved="false" />
         <ListPreference
+            android:defaultValue="0"
+            android:entries="@array/match_screen_scale_names"
+            android:entryValues="@array/match_screen_scale_values"
+            android:key="list_match_screen_scale"
+            android:summary="@string/summary_match_screen_scale"
+            android:title="@string/title_match_screen_scale"
+            app:iconSpaceReserved="false" />
+        <ListPreference
             android:defaultValue="60"
             android:entries="@array/fps_names"
             android:entryValues="@array/fps_values"

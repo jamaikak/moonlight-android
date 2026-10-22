@@ -85,6 +85,7 @@ import android.os.PersistableBundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.Rational;
+import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.InputDevice;
@@ -430,6 +431,13 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
             displayWidth = shouldInvertDecoderResolution ? prefConfig.height : prefConfig.width;
             displayHeight = shouldInvertDecoderResolution ? prefConfig.width : prefConfig.height;
+
+            if (prefConfig.matchScreenScale > 0) {
+                int[] matched = computeMatchedStreamSize();
+                prefConfig.width = displayWidth = matched[0];
+                prefConfig.height = displayHeight = matched[1];
+                shouldInvertDecoderResolution = false;
+            }
 
             // Enter landscape unless we're on a square screen
             setPreferredOrientationForActivity();
@@ -1141,7 +1149,50 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         prefConfig.onscreenController= virtualController.switchShowHide() != 0;
     }
 
+    // Size of the stream when "match screen size" is on: the current window scaled by the chosen
+    // percentage, rounded to multiples of 8 and capped so the long side stays within 4096.
+    private int[] computeMatchedStreamSize() {
+        DisplayMetrics metrics = getResources().getDisplayMetrics();
+        float scale = prefConfig.matchScreenScale / 100f;
+        float longSide = Math.max(metrics.widthPixels, metrics.heightPixels) * scale;
+        if (longSide > 4096) {
+            scale *= 4096 / longSide;
+        }
+        int width = Math.max(64, Math.round(metrics.widthPixels * scale / 8f) * 8);
+        int height = Math.max(64, Math.round(metrics.heightPixels * scale / 8f) * 8);
+        return new int[] { width, height };
+    }
+
+    // Folding, unfolding, rotating or resizing the window changes the screen shape, so the stream
+    // has to be started again at the new size.
+    private final Runnable matchedResolutionCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || isDestroyed() || prefConfig.matchScreenScale <= 0 || onExternelDisplay) {
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode()) {
+                return;
+            }
+
+            int[] matched = computeMatchedStreamSize();
+            boolean widthChanged = Math.abs(matched[0] - displayWidth) > displayWidth * 0.04f;
+            boolean heightChanged = Math.abs(matched[1] - displayHeight) > displayHeight * 0.04f;
+            if (widthChanged || heightChanged) {
+                LimeLog.info("Screen changed to " + matched[0] + "x" + matched[1] + ", restarting stream (was " +
+                        displayWidth + "x" + displayHeight + ")");
+                recreate();
+            }
+        }
+    };
+
     private void setPreferredOrientationForActivity() {
+        if (prefConfig.matchScreenScale > 0 && !onExternelDisplay) {
+            // The stream follows the screen, so let the screen pick its orientation
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
+            return;
+        }
+
         Display display = getActiveDisplay(Game.this, prefConfig);
 
         // For semi-square displays, we use more complex logic to determine which orientation to use (if any)
@@ -1190,6 +1241,10 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
         // Set requested orientation for possible new screen size
         setPreferredOrientationForActivity();
+
+        // Let the new window size settle (fold animations, rotation) before restarting the stream
+        timerHandler.removeCallbacks(matchedResolutionCheck);
+        timerHandler.postDelayed(matchedResolutionCheck, 1000);
 
         if (virtualController != null) {
             // Refresh layout of OSC for possible new screen size

@@ -221,6 +221,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
     private Consumer<WindowLayoutInfo> windowLayoutListener;
     private boolean tabletopActive = false;
     private boolean tabletopShowedKeyboard = false;
+    private TextView tabletopPadHint;
     private boolean isPanZoomMode = false;
     private boolean synthClickPending = false;
     private boolean pointerSwiping = false;
@@ -465,6 +466,7 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
 
         if (
                 prefConfig.videoScaleMode == PreferenceConfiguration.ScaleMode.STRETCH ||
+                        prefConfig.matchScreenScale > 0 ||
                         shouldIgnoreInsetsForResolution(displayWidth, displayHeight)
         ) {
             // Allow the activity to layout under notches if the fill-screen option
@@ -1810,6 +1812,16 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         tabletopActive = enter;
 
         if (enter) {
+            // Draw under the camera cutout so the stream fills the whole top half
+            WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+            }
+            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            }
+            getWindow().setAttributes(attributes);
+
             // The bottom half is the touchpad, so force trackpad mode and bring up the keyboard
             applyMouseMode(2);
             if (!isKeyboardLayoutVisible()) {
@@ -1823,6 +1835,48 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 toggleFullKeyboard();
             }
             tabletopShowedKeyboard = false;
+        }
+
+        updateTabletopKeyboardAndPad(hinge);
+    }
+
+    // Keep the keyboard to the bottom of the lower half and mark the strip between the hinge and
+    // the keyboard as the trackpad, since touches there fall through to the background touch view.
+    private void updateTabletopKeyboardAndPad(Rect hinge) {
+        FrameLayout root = (FrameLayout) rootView;
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+
+        if (tabletopPadHint != null) {
+            root.removeView(tabletopPadHint);
+            tabletopPadHint = null;
+        }
+
+        if (hinge == null) {
+            if (keyBoardLayoutController != null) {
+                keyBoardLayoutController.setMaxHeight(0);
+                keyBoardLayoutController.refreshLayout();
+            }
+            return;
+        }
+
+        int lowerHalf = Math.max(0, screenHeight - hinge.bottom);
+        int keyboardHeight = (int) (lowerHalf * 0.6f);
+        if (keyBoardLayoutController != null) {
+            keyBoardLayoutController.setMaxHeight(keyboardHeight);
+            keyBoardLayoutController.refreshLayout();
+        }
+
+        int padHeight = lowerHalf - (keyBoardLayoutController != null && keyBoardLayoutController.shown ? keyboardHeight : 0);
+        if (padHeight > 0) {
+            tabletopPadHint = new TextView(this);
+            tabletopPadHint.setText(R.string.tabletop_trackpad_hint);
+            tabletopPadHint.setGravity(Gravity.CENTER);
+            tabletopPadHint.setTextColor(0x66FFFFFF);
+            tabletopPadHint.setBackgroundColor(0x33FFFFFF);
+            FrameLayout.LayoutParams hintParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, padHeight);
+            hintParams.gravity = Gravity.TOP;
+            hintParams.topMargin = hinge.bottom;
+            root.addView(tabletopPadHint, hintParams);
         }
     }
 

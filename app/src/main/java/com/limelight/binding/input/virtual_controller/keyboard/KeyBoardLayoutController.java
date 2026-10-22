@@ -46,6 +46,8 @@ public class KeyBoardLayoutController {
     private FrameLayout frame_layout = null;
     private final Handler handler;
     public boolean shown = false;
+    // 0 = no limit. Tabletop mode caps the keyboard so part of the lower half stays free for the trackpad.
+    private int maxHeight = 0;
     private final LinearLayout keyboardView;
     private PopupWindow keyPopup;
     private TextView keyPopupText;
@@ -318,6 +320,15 @@ public class KeyBoardLayoutController {
         }
     }
 
+    public void setMaxHeight(int maxHeight) {
+        this.maxHeight = maxHeight;
+    }
+
+    public int getLayoutHeight() {
+        ViewGroup.LayoutParams params = keyboardView.getLayoutParams();
+        return params != null ? params.height : 0;
+    }
+
     public void refreshLayout() {
         frame_layout.removeView(keyboardView);
 
@@ -332,6 +343,9 @@ public class KeyBoardLayoutController {
             DisplayMetrics screen = context.getResources().getDisplayMetrics();
             width = screen.widthPixels;
             height = (int) (screen.heightPixels * 0.5);
+        }
+        if (maxHeight > 0 && height > maxHeight) {
+            height = maxHeight;
         }
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, height);
         params.gravity = Gravity.BOTTOM;

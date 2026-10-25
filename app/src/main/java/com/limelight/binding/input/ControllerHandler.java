@@ -1395,6 +1395,15 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             return KeyEvent.KEYCODE_BUTTON_MODE;
         }
 
+        // On a Shield, the system intercepts BUTTON_MODE as a global Home shortcut. A custom
+        // key layout can move the DualSense PS button (scancode 316) to BUTTON_16 so it reaches
+        // us, and we translate it back to the Guide button here.
+        if (context.vendorId == 0x054c &&
+                event.getScanCode() == 316 &&
+                event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_16) {
+            return KeyEvent.KEYCODE_BUTTON_MODE;
+        }
+
         // This mapping was adding in Android 10, then changed based on
         // kernel changes (adding hid-nintendo) in Android 11. If we're
         // on anything newer than Pie, just use the built-in mapping.

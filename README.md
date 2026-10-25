@@ -47,6 +47,8 @@ If you switch back to the main stream version, you'll be missing the following a
 30. Clipboard sync (requires Apollo)
 31. SBS 3D for external Displays (Using AI MiDaS v2 Lite)
 
+See [docs/](docs/README.md) for this fork's additions, build and CI notes, and the Shield DualSense setup.
+
 # Disclaimer
 
 This is the `go away` version of Moonlight Android.

@@ -9,8 +9,8 @@ NEW=/data/local/tmp/Vendor_054c_Product_0ce6.kl
 # Already applied this boot?
 grep -q 'BUTTON_16' "$KL" && exit 0
 
-sed 's/^key 316 .*BUTTON_MODE.*/key 316   BUTTON_16/' "$KL" > "$NEW" || exit 1
-grep -q '^key 316   BUTTON_16' "$NEW" || { echo "key 316 not found in $KL" >&2; exit 1; }
+sed '/^key 316 /d' "$KL" > "$NEW" || exit 1
+echo 'key 316   BUTTON_16' >> "$NEW"
 chmod 644 "$NEW"
 chcon u:object_r:system_file:s0 "$NEW" 2>/dev/null
 mount -o bind "$NEW" "$KL"
